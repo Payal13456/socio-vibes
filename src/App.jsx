@@ -21,7 +21,9 @@ import {
   ChevronLeft,
   PenTool,
   RefreshCw,
+  Download,
 } from "lucide-react";
+import { initializeApp } from "firebase/app";
 import {
   getAuth,
   signInAnonymously,
@@ -43,16 +45,26 @@ import {
   arrayUnion,
   arrayRemove,
   limit,
+  writeBatch,
 } from "firebase/firestore";
-
 import { auth, db } from "./firebase.js";
 const appId = "soul-scribe-v1";
 
 /**
  * GEMINI API UTILITIES
  */
-const GEMINI_API_KEY = "AIzaSyAp36NRzU1dWA7LGZPKvlwMK4QEC2BWcHI"; // Injected by environment
+const GEMINI_API_KEY = "AIzaSyBp_meA1GySMbz5_njoXLpyz_4hjvyVBp8"; // Injected by environment
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${GEMINI_API_KEY}`;
+
+// Mock data for fallbacks when API quota is exceeded
+const MOCK_QUOTES = [
+  "The soul has been given its own ears to hear things the mind does not understand. – Rumi",
+  "Your heart is the size of an ocean. Go find yourself in its hidden depths. – Rumi",
+  "What you seek is seeking you. – Rumi",
+  "Where there is ruin, there is hope for a treasure. – Rumi",
+  "Silence is the language of God, all else is poor translation. – Rumi",
+  "Do not be satisfied with the stories that come before you. Unfold your own myth. – Rumi",
+];
 
 const callGemini = async (prompt, systemInstruction = "") => {
   try {
@@ -70,14 +82,31 @@ const callGemini = async (prompt, systemInstruction = "") => {
     });
 
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || "API Error");
+    if (!response.ok) {
+      console.error("Gemini API Error Detail:", data);
+      throw new Error(data.error?.message || "API Error");
+    }
     return (
       data.candidates?.[0]?.content?.parts?.[0]?.text ||
       "I couldn't generate that right now."
     );
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Sorry, I'm having trouble connecting to the creative muse right now.";
+
+    // SMART FALLBACK: Simulate AI behavior so the app doesn't feel broken
+    const isQuoteRequest =
+      prompt.toLowerCase().includes("quote") ||
+      systemInstruction.toLowerCase().includes("quote");
+
+    if (isQuoteRequest) {
+      // Return a random Rumi quote to simulate generation
+      const randomQuote =
+        MOCK_QUOTES[Math.floor(Math.random() * MOCK_QUOTES.length)];
+      return randomQuote;
+    }
+
+    // Fallback for Chat
+    return "My connection to the universal muse is faint right now (Quota Limit Reached). But know that your words are heard. Please try again in a moment.";
   }
 };
 
@@ -138,8 +167,9 @@ export default function App() {
   const [user, setUser] = useState(null);
   const [view, setView] = useState("feed");
 
-  // 1. DYNAMICALLY INJECT BOOTSTRAP CSS
+  // 1. DYNAMICALLY INJECT BOOTSTRAP CSS & HTML2CANVAS
   useEffect(() => {
+    // Bootstrap CSS
     const link = document.createElement("link");
     link.href =
       "https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css";
@@ -147,15 +177,21 @@ export default function App() {
     link.crossOrigin = "anonymous";
     document.head.appendChild(link);
 
-    // Optional: Add Google Font for Georgia feel
+    // Google Fonts
     const font = document.createElement("link");
     font.href =
       "https://fonts.googleapis.com/css2?family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap";
     font.rel = "stylesheet";
     document.head.appendChild(font);
+
+    // HTML2Canvas for Image Generation
+    const script = document.createElement("script");
+    script.src =
+      "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+    script.async = true;
+    document.body.appendChild(script);
   }, []);
 
-  // Auth Logic
   useEffect(() => {
     // Simply sign in anonymously
     signInAnonymously(auth).catch(console.error);
@@ -167,6 +203,7 @@ export default function App() {
   const navigate = (newView) => {
     setView(newView);
   };
+
   if (!user) {
     return (
       <div className="d-flex align-items-center justify-content-center vh-100 bg-light">
@@ -526,10 +563,37 @@ function QuoteCard({ quote, user }) {
     const btn = document.getElementById(`share-${quote.id}`);
     if (btn) {
       const original = btn.innerHTML;
-      btn.innerText = "✓";
+      btn.innerHTML = "✓";
       setTimeout(() => {
         btn.innerHTML = original;
       }, 2000);
+    }
+  };
+
+  const downloadImage = async () => {
+    const element = document.getElementById(`quote-card-${quote.id}`);
+    if (!element) return;
+
+    try {
+      const html2canvas = window.html2canvas;
+      if (!html2canvas) {
+        // Fallback or alert if script not ready
+        alert("Image generator is warming up. Try again in a second!");
+        return;
+      }
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: null,
+      });
+
+      const link = document.createElement("a");
+      link.download = `soul-scribe-${quote.id}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (err) {
+      console.error("Download failed:", err);
     }
   };
 
@@ -558,8 +622,9 @@ function QuoteCard({ quote, user }) {
         </button>
       </div>
 
-      {/* Quote Display */}
+      {/* Quote Display - CAPTURE TARGET */}
       <div
+        id={`quote-card-${quote.id}`}
         className="d-flex align-items-center justify-content-center p-4 text-center position-relative w-100"
         style={{ minHeight: "340px", ...theme.style }}
       >
@@ -581,6 +646,14 @@ function QuoteCard({ quote, user }) {
             style={{ fontSize: "0.7rem", letterSpacing: "2px" }}
           >
             {quote.authorName}
+          </div>
+
+          {/* Soul Scribe Signature Watermark */}
+          <div
+            className="position-absolute bottom-0 end-0 p-3 opacity-50 small fst-italic"
+            style={{ fontSize: "0.6rem", fontFamily: "serif" }}
+          >
+            Soul Scribe
           </div>
         </div>
       </div>
@@ -612,13 +685,24 @@ function QuoteCard({ quote, user }) {
               </span>
             </button>
           </div>
-          <button
-            id={`share-${quote.id}`}
-            onClick={handleShare}
-            className="btn btn-link text-secondary p-0"
-          >
-            <Share2 size={22} />
-          </button>
+
+          <div className="d-flex gap-3">
+            <button
+              onClick={downloadImage}
+              className="btn btn-link text-secondary p-0"
+              title="Download as Image"
+            >
+              <Download size={22} />
+            </button>
+            <button
+              id={`share-${quote.id}`}
+              onClick={handleShare}
+              className="btn btn-link text-secondary p-0"
+              title="Copy Text"
+            >
+              <Share2 size={22} />
+            </button>
+          </div>
         </div>
 
         {/* Comments Section */}
