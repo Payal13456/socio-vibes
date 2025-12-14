@@ -39,6 +39,7 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   signOut,
+  updateProfile,
 } from "firebase/auth";
 import {
   getFirestore,
@@ -191,6 +192,7 @@ export default function App() {
 
   // Auth State
   const [authEmail, setAuthEmail] = useState("");
+  const [authName, setAuthName] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [isSignUp, setIsSignUp] = useState(false);
   const [authError, setAuthError] = useState("");
@@ -256,7 +258,29 @@ export default function App() {
     setAuthLoading(true);
     try {
       if (isSignUp) {
-        await createUserWithEmailAndPassword(auth, authEmail, authPassword);
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          authEmail,
+          authPassword
+        );
+
+        const user = userCredential.user;
+
+        await updateProfile(user, {
+          displayName: authName,
+        });
+
+        await setDoc(
+          doc(db, "artifacts", appId, "users", user.uid, "profile", "info"),
+          {
+            name: authName,          // fallback
+            penName: authName,       // primary
+            email: user.email,
+            uid: user.uid,
+            createdAt: new Date(),
+          },
+          { merge: true } // 🔥 important if doc already exists
+        );
       } else {
         await signInWithEmailAndPassword(auth, authEmail, authPassword);
       }
@@ -279,12 +303,28 @@ export default function App() {
         className="d-flex flex-column align-items-center justify-content-center vh-100 px-4"
         style={{ backgroundColor: "#fdfbf7", color: "#2c1810" }}
       >
-        <style>{`
-          :root { --bs-primary: #8B4513; }
-          body { font-family: 'Libre Baskerville', serif; background-color: #fdfbf7; }
-          .form-control:focus { border-color: #8B4513; box-shadow: 0 0 0 0.25rem rgba(139, 69, 19, 0.25); }
-        `}</style>
-
+         <style>{`
+        :root { 
+          --bs-primary: #8B4513; /* Saddle Brown */
+          --bs-primary-rgb: 139, 69, 19;
+          --bs-body-bg: #fdfbf7;
+          --bs-body-color: #2c1810;
+        }
+        body { 
+          font-family: 'Libre Baskerville', 'Georgia', serif; 
+          background-color: #f0e6d2; 
+        }
+        .font-sans { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+        .btn-primary { background-color: var(--bs-primary); border-color: var(--bs-primary); }
+        .text-primary { color: var(--bs-primary) !important; }
+        .bg-primary-subtle { background-color: #FAF0E6 !important; color: #8B4513 !important; } 
+        .quote-card { transition: transform 0.2s; }
+        .floating-fab { box-shadow: 0 4px 10px rgba(139, 69, 19, 0.3); }
+        .book-spine-shadow { box-shadow: inset 15px 0 20px -10px rgba(0,0,0,0.05); }
+        .form-control:focus { border-color: #8B4513; box-shadow: none; }
+      `}</style>
         <div className="mb-4 text-center animate-fade-in">
           <div
             className="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center shadow mx-auto mb-3"
@@ -306,6 +346,29 @@ export default function App() {
           style={{ maxWidth: "360px", backgroundColor: "#fffbf0" }}
         >
           <form onSubmit={handleAuthSubmit}>
+            {isSignUp  &&
+              <div className="mb-3">
+                <label
+                  className="form-label small fw-bold text-muted text-uppercase"
+                  style={{ fontSize: "10px", letterSpacing: "1px" }}
+                >
+                  Name
+                </label>
+                <div className="input-group">
+                  <span className="input-group-text bg-white border-end-0 text-muted">
+                    <Mail size={16} />
+                  </span>
+                  <input
+                    type="text"
+                    className="form-control border-start-0 bg-white shadow-none"
+                    placeholder="John Doe"
+                    value={authName}
+                    onChange={(e) => setAuthName(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+            }
             <div className="mb-3">
               <label
                 className="form-label small fw-bold text-muted text-uppercase"
@@ -359,6 +422,7 @@ export default function App() {
               type="submit"
               disabled={authLoading}
               className="btn btn-primary w-100 rounded-pill fw-bold shadow-sm py-2"
+              
             >
               {authLoading ? (
                 <span className="spinner-border spinner-border-sm"></span>
@@ -1618,13 +1682,22 @@ function ProfileView({ user }) {
             <p className="small text-muted font-sans mb-3">
               {profile?.bio || "Socio Vibes Member"}
             </p>
-            <button
-              onClick={() => setIsEditing(true)}
-              className="btn btn-outline-primary btn-sm rounded-pill px-3 font-sans d-inline-flex align-items-center gap-1 mb-4"
-              style={{ fontSize: "10px" }}
-            >
-              <Edit3 size={12} /> Edit Profile
-            </button>
+            <div className="d-flex justify-content-center mb-4">
+              <button
+                onClick={() => setIsEditing(true)}
+                className="btn btn-outline-primary btn-sm rounded-pill px-3 font-sans d-inline-flex align-items-center gap-1 mb-4"
+                style={{ fontSize: "10px" }}
+              >
+                <Edit3 size={12} /> Edit Profile
+              </button>{" "}
+              <button
+                onClick={() => signOut(auth)}
+               className="btn btn-outline-danger btn-sm rounded-pill px-3 font-sans d-inline-flex align-items-center gap-1 mb-4"
+                style={{ fontSize: "10px" }}
+              >
+                <LogOut size={12} /> Sign Out
+              </button>
+            </div>
           </>
         ) : (
           <form
@@ -1737,16 +1810,6 @@ function ProfileView({ user }) {
             </div>
           </div>
         </div>
-      </div>
-
-      <div className="d-flex justify-content-center mb-4">
-        <button
-          onClick={() => signOut(auth)}
-          className="btn btn-outline-danger btn-sm rounded-pill px-3 font-sans d-flex align-items-center gap-1"
-          style={{ fontSize: "10px" }}
-        >
-          <LogOut size={12} /> Sign Out
-        </button>
       </div>
 
       <div className="d-flex align-items-center justify-content-between mb-3 px-2 border-bottom border-secondary border-opacity-10 pb-2">

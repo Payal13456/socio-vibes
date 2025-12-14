@@ -9,13 +9,13 @@ import { getFirestore } from "firebase/firestore";
 // Your web app's Firebase configuration
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyDKQ-H0KXSpTGUmwpkvH0pBo6RpW75pvAY",
-  authDomain: "soul-scribe-3e073.firebaseapp.com",
-  projectId: "soul-scribe-3e073",
-  storageBucket: "soul-scribe-3e073.firebasestorage.app",
-  messagingSenderId: "388842500854",
-  appId: "1:388842500854:web:7d0e9c3c4e0da78767b2d7",
-  measurementId: "G-MC2CK98VH8",
+  apiKey: "AIzaSyC8vCjp7wGr5QTIaLfoSisAZjYQHIQZCvw",
+  authDomain: "socio-vibes.firebaseapp.com",
+  projectId: "socio-vibes",
+  storageBucket: "socio-vibes.firebasestorage.app",
+  messagingSenderId: "406222854076",
+  appId: "1:406222854076:web:c896ce0a9f271a2331bdb9",
+  measurementId: "G-NQJSQYQZK0"
 };
 
 // Initialize Firebase
